@@ -20,8 +20,7 @@ import numpy as np
 import matplotlib.pyplot as plt
 
 
-def yawerrorcal(df, wfid, wtid):
-    # df=dataset
+def yawerrorcal(data, wfid, wtid):
     cutinwind = 3
     cutoutwind = 25
     efcutoutwind = 7
@@ -43,7 +42,7 @@ def yawerrorcal(df, wfid, wtid):
     for iwind in range(1, efwindbinno + 1):
         wind_speed = (iwind - 1) * 0.5 + cutinwind
         print(wind_speed)
-        tempwindbin = df[(df['WTUR_WSpd_Ra_F32'] > wind_speed - 0.25) & (df['WTUR_WSpd_Ra_F32'] <= wind_speed + 0.25)]
+        tempwindbin = data[(data['WTUR_WSpd_Ra_F32'] > wind_speed - 0.25) & (data['WTUR_WSpd_Ra_F32'] <= wind_speed + 0.25)]
         validdata[iwind - 1] = round(len(tempwindbin) * 7 / 3600, 2)
         for iwdir in range(1, 301):
             tempdirbin = tempwindbin[(tempwindbin['WYAW_Wdir_Ra_F32'] > (iwdir - 1) * 0.2 - 30) & (tempwindbin['WYAW_Wdir_Ra_F32'] <= iwdir * 0.2 - 30)]
@@ -108,7 +107,8 @@ def yawerrorcal(df, wfid, wtid):
 
 def main_process(data):
     # 功能：求该机组的对风偏差
-    # 输入：data——7s数据；
+    # 输入：data——7s数据
+
     # 数据处理
     wfid = data['wfid'].iloc[0]
     wtid = data['wtid'].iloc[0]
@@ -126,10 +126,11 @@ def dataProcess():
     # 2.选择列
     result_column = "wfid,wtid,ts, WTUR_WSpd_Ra_F32,WTUR_PwrAt_Ra_F32,WYAW_Wdir_Ra_F32,WTUR_State_Rn_I8,WTPS_Ang_Ra_F32_blade1"
 
-    # 3.分析数据准备
+    # 3.SQL
     sql = "select " + result_column + " from {0} " + where_condition
     sql = sql.format(table)
-    # 7s数据
+
+    # 执行查询获取7s数据
     data = exec_sql(db, sql)
     main_process(data)
 
