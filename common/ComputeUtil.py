@@ -153,7 +153,7 @@ def start_stop_extract(df,data):
     re = re[['wfid','wtid','ts_start','ts_end','seconds','seconds_3','seconds_3_1','seconds_3_2','seconds_4','wind_mean','wind_mean_3_1','wind_mean_4','state']]
     return(re)
 
-def start_2h_count(start_stop,data,result_dir):
+def start_2h_count(start_stop,data):
     # 功能：基于start_stop将时间按两小时切割，计算起机次数
     # 输入：start_stop——起停机时长、时间范围、平均风速；data——原始7s数据
     # 输出：start_2h
