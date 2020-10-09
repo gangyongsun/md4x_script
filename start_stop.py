@@ -55,15 +55,17 @@ def plot(start_stop, start_2h):
 
 def main_process(data, limit):
     # 1. 前期处理：根据风机状态将数据切割，取出时长和时间范围，并判断是否连续
-    data = data.sort_values('ts')
-    data = data.reset_index(drop=True)
+    # data = data.sort_values('ts')
+    data = data.reset_index(drop=True)  # 重新排序，去掉索引
     data = time_diff(data, 'ts')  # 加一列：ts_diff，异常值不能用round(mean)代替
     data_1 = state_recognize(data, 'WTUR_TurSt_Rs_S')
-    result = data_1.groupby(['wfid', 'wtid', 'WTUR_TurSt_Rs_S', 'WTUR_TurSt_Rs_S_slice'])['ts_diff'].sum()
+    group_by_result = data_1.groupby(['wfid', 'wtid', 'WTUR_TurSt_Rs_S', 'WTUR_TurSt_Rs_S_slice'])
+
+    result = group_by_result['ts_diff'].sum()
     result = pd.DataFrame(result)
-    result['ts_diff_max'] = data_1.groupby(['wfid', 'wtid', 'WTUR_TurSt_Rs_S', 'WTUR_TurSt_Rs_S_slice'])['ts_diff'].max()
-    result['ts_start'] = data_1.groupby(['wfid', 'wtid', 'WTUR_TurSt_Rs_S', 'WTUR_TurSt_Rs_S_slice'])['ts'].min()
-    result['ts_end'] = data_1.groupby(['wfid', 'wtid', 'WTUR_TurSt_Rs_S', 'WTUR_TurSt_Rs_S_slice'])['ts'].max()
+    result['ts_diff_max'] = group_by_result['ts_diff'].max()
+    result['ts_start'] = group_by_result['ts'].min()
+    result['ts_end'] = group_by_result['ts'].max()
     result = result.reset_index()
     result['is_discontinue'] = [(1 if i > limit else 0) for i in result['ts_diff_max']]
     result = result.sort_values('WTUR_TurSt_Rs_S_slice')
@@ -74,21 +76,22 @@ def main_process(data, limit):
     start_stop = start_stop_extract(result, data)  # 基于result取出起停机的时长、时间范围、平均风速
 
     # 3. 结果2：基于result统计起停机时长、时间范围、平均风速
-    start_stop_sta = start_stop.groupby(['wfid', 'wtid', 'state'])['wtid'].count()
+    group_by_start_stop_sta = start_stop.groupby(['wfid', 'wtid', 'state'])
+    start_stop_sta = group_by_start_stop_sta['wtid'].count()
     start_stop_sta = pd.DataFrame(start_stop_sta)
     start_stop_sta.columns = ['count']
-    start_stop_sta['seconds_min'] = start_stop.groupby(['wfid', 'wtid', 'state'])['seconds'].min()
-    start_stop_sta['seconds_max'] = start_stop.groupby(['wfid', 'wtid', 'state'])['seconds'].max()
-    start_stop_sta['seconds_mean'] = start_stop.groupby(['wfid', 'wtid', 'state'])['seconds'].mean()
-    start_stop_sta['seconds_3_1_min'] = start_stop.groupby(['wfid', 'wtid', 'state'])['seconds_3_1'].min()
-    start_stop_sta['seconds_3_1_max'] = start_stop.groupby(['wfid', 'wtid', 'state'])['seconds_3_1'].max()
-    start_stop_sta['seconds_3_1_mean'] = start_stop.groupby(['wfid', 'wtid', 'state'])['seconds_3_1'].mean()
-    start_stop_sta['seconds_3_2_min'] = start_stop.groupby(['wfid', 'wtid', 'state'])['seconds_3_2'].min()
-    start_stop_sta['seconds_3_2_max'] = start_stop.groupby(['wfid', 'wtid', 'state'])['seconds_3_2'].max()
-    start_stop_sta['seconds_3_2_mean'] = start_stop.groupby(['wfid', 'wtid', 'state'])['seconds_3_2'].mean()
-    start_stop_sta['seconds_4_min'] = start_stop.groupby(['wfid', 'wtid', 'state'])['seconds_4'].min()
-    start_stop_sta['seconds_4_max'] = start_stop.groupby(['wfid', 'wtid', 'state'])['seconds_4'].max()
-    start_stop_sta['seconds_4_mean'] = start_stop.groupby(['wfid', 'wtid', 'state'])['seconds_4'].mean()
+    start_stop_sta['seconds_min'] = group_by_start_stop_sta['seconds'].min()
+    start_stop_sta['seconds_max'] = group_by_start_stop_sta['seconds'].max()
+    start_stop_sta['seconds_mean'] = group_by_start_stop_sta['seconds'].mean()
+    start_stop_sta['seconds_3_1_min'] = group_by_start_stop_sta['seconds_3_1'].min()
+    start_stop_sta['seconds_3_1_max'] = group_by_start_stop_sta['seconds_3_1'].max()
+    start_stop_sta['seconds_3_1_mean'] = group_by_start_stop_sta['seconds_3_1'].mean()
+    start_stop_sta['seconds_3_2_min'] = group_by_start_stop_sta['seconds_3_2'].min()
+    start_stop_sta['seconds_3_2_max'] = group_by_start_stop_sta['seconds_3_2'].max()
+    start_stop_sta['seconds_3_2_mean'] = group_by_start_stop_sta['seconds_3_2'].mean()
+    start_stop_sta['seconds_4_min'] = group_by_start_stop_sta['seconds_4'].min()
+    start_stop_sta['seconds_4_max'] = group_by_start_stop_sta['seconds_4'].max()
+    start_stop_sta['seconds_4_mean'] = group_by_start_stop_sta['seconds_4'].mean()
     start_stop_sta = start_stop_sta.reset_index()
     # 4. 结果3：基于start_stop将时间按两小时切割，计算起机次数
     start_2h = start_2h_count(start_stop, data)
@@ -109,6 +112,7 @@ def dataProcess(limit=200, wind_is_correct=0, wtid_info=[]):
     # 数据准备
     # 1.where条件
     where_condition = "where wtid='632500001' and ts >= '2019-01-01 00:00:00' and ts < '2020-05-01 00:00:00' "
+    order_by = " order by 'ts' "
 
     # 2.选择列
     if wind_is_correct == 0:
@@ -117,9 +121,9 @@ def dataProcess(limit=200, wind_is_correct=0, wtid_info=[]):
         result_column = "wfid,wtid,ts,WTUR_WSpd_Ra_F32,WTPS_Ang_Ra_F32_blade1,WTUR_TurSt_Rs_S,WTUR_Temp_Ra_F32"
 
     # 3.分析数据准备
-    sql = "select " + result_column + " from {0} " + where_condition
+    sql = "select " + result_column + " from {0} " + where_condition + order_by
     sql = sql.format(table)
-    print(sql)
+    # print(sql)
     data = exec_sql(db, sql)
 
     # wind_is_correct不为0的情况

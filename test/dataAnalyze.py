@@ -2,12 +2,12 @@ import matplotlib.pyplot as plt
 
 dog_arr = plt.imread('./dog.png')
 
-print(dog_arr)
+# print(dog_arr)
 # plt.imshow(dog_arr)
 # plt.imshow(dog_arr[::-1])
 # plt.imshow(dog_arr[:,::-1,:])
 # plt.imshow(dog_arr[:,:,::-1])
-plt.show()
+# plt.show()
 
 import numpy as np
 
@@ -186,4 +186,49 @@ a = np.arange(15).reshape(3, 5)
 # print(a[:, ::-1])  # 列倒置
 # print(a[::-1, :-1])
 
+# 变形前和变形后数组元素的个数是不可以改变
+b = np.random.randint(0, 100, size=(4, 6))
+# print(b)
+
+b = b.reshape((3, 8))
+# print(b)
+
+
+# 级联操作concatenate函数
+# 将多个numpy数组进行横向或者纵向的拼接
+# axis轴向的理解
+# 0:控制列
+# 1:控制行
+# 问题：
+# 级联的两个数组维度一样，但是行列个数不一样会如何？
+# 必须保证行或列相同的情况下进行级联操作，否则报错
+
+c = np.random.randint(0, 20, size=(3, 4))
+# print(c)
+
+d = np.random.randint(0, 20, size=(3, 2))
+# print(d)
+
+e = np.concatenate((c, d), axis=1)
+# print(e)
+
+
+arr_3 = np.concatenate((dog_arr, dog_arr, dog_arr), axis=1)
+arr_9 = np.concatenate((arr_3, arr_3, arr_3), axis=0)
+# plt.imshow(arr_9)
+# plt.imsave('./dog_9.png',arr_9, dpi=600)
+# plt.imsave('./dog_9_2.png',arr_9, cmap='gray')
+# plt.show()
+
+
+# 常用的聚合函数
+# sum,max,min,mean
+
+d = np.random.randint(0, 20, size=(3, 2))
+print(d)
+
+# d=d.sum(axis=1)  # 求所有行的和
+d=d.sum(axis=0)  # 求所有列的和
+d=d.sum(axis=None)  # 求所有元素的和
+print(d)
 
