@@ -80,7 +80,7 @@ def main_process(data):
     # 输出：结果已保存至result_dir路径，并输出result
 
     # 数据处理
-    data['ts_2'] = data['ts'].str[0:10] + ' ' + data['ts'].str[11:15] + '0:00'
+    # data['ts_2'] = data['ts'].str[0:10] + ' ' + data['ts'].str[11:15] + '0:00'
 
     result = data.groupby(['wfid', 'wtid', 'ts_2']).mean()  # 7s转10Min
 
@@ -88,11 +88,13 @@ def main_process(data):
     result = result[(result['WTUR_State_Rn_I8'] > 0.9) & (result['count'] > 30)]
     result['windbin'] = round(result['WTUR_WSpd_Ra_F32'] / 0.5 + 0.00000001) * 0.5
     result = result.reset_index()
+    # z.show(result)
 
     result_2 = result.groupby(['wfid', 'wtid', 'windbin']).mean()  # 分仓求平均
     result_2 = result_2.drop(['WTUR_State_Rn_I8', 'count'], axis=1)  # 删除列
     result_2['count'] = result.groupby(['wfid', 'wtid', 'windbin'])['WTUR_WSpd_Ra_F32'].count()
     result_2 = result_2.reset_index()
+    # z.show(result_2)
     # 调用绘图功能函数
     plot(data, result, result_2)
 
@@ -100,11 +102,11 @@ def main_process(data):
 def dataProcess(wind_is_correct=0, wtid_info=[]):
     # 准备分析数据
     # 1.where条件
-    where_condition = "where wtid='632500001' and ts >= '2019-01-01 00:00:00' and ts < '2020-05-01 00:00:00'"
+    where_condition = "where wtid='632500001' and ts >= '2019-01-01 00:00:00' and ts < '2020-05-01 00:00:00' limit 10000"
 
     # 2.选择列
     if wind_is_correct == 0:
-        result_column = "wfid, wtid, ts, WTUR_WSpd_Ra_F32, WTUR_PwrAt_Ra_F32, WGEN_Spd_Ra_F32, WCNV_Other_Ra_F32_TorqueReference, WTPS_Ang_Ra_F32_blade1, WTUR_State_Rn_I8"
+        result_column = "wfid, wtid, ts,concat(substring(ts, 1,10),' ', substring(ts, 11,5), '0:00') as ts_2, WTUR_WSpd_Ra_F32, WTUR_PwrAt_Ra_F32, WGEN_Spd_Ra_F32, WCNV_Other_Ra_F32_TorqueReference, WTPS_Ang_Ra_F32_blade1, WTUR_State_Rn_I8"
     else:
         result_column = "wfid, wtid, ts, WTUR_WSpd_Ra_F32, WTUR_PwrAt_Ra_F32, WGEN_Spd_Ra_F32, WCNV_Other_Ra_F32_TorqueReference, WTPS_Ang_Ra_F32_blade1," \
                         "WTUR_State_Rn_I8, WTUR_Temp_Ra_F32wfid, wtid, ts, WTUR_WSpd_Ra_F32, WTUR_PwrAt_Ra_F32, WGEN_Spd_Ra_F32, WCNV_Other_Ra_F32_TorqueReference, WTPS_Ang_Ra_F32_blade1," \
@@ -125,6 +127,8 @@ def dataProcess(wind_is_correct=0, wtid_info=[]):
         altitude = wtid_info_i.loc[0, 'altitude']
         density = wtid_info_i.loc[0, 'density']
         data['WTUR_WSpd_Ra_F32'] = WindNorm_altitude(altitude, data['WTUR_Temp_Ra_F32'], data['WTUR_WSpd_Ra_F32'], density)  # 风速折到density下
+
+    # z.show(data)
 
     main_process(data)
 

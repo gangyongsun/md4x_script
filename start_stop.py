@@ -55,7 +55,7 @@ def plot(start_stop, start_2h):
 
 def main_process(data, limit):
     # 1. 前期处理：根据风机状态将数据切割，取出时长和时间范围，并判断是否连续
-    # data = data.sort_values('ts')
+    #data = data.sort_values('ts') #用sql处理
     data = data.reset_index(drop=True)  # 重新排序，去掉索引
     data = time_diff(data, 'ts')  # 加一列：ts_diff，异常值不能用round(mean)代替
     data_1 = state_recognize(data, 'WTUR_TurSt_Rs_S')
@@ -104,15 +104,12 @@ def main_process(data, limit):
 def dataProcess(limit=200, wind_is_correct=0, wtid_info=[]):
     # 功能：用于启停机时长统计
     # 输入：
-    #   data——7s数据；
     #   limit——当时间间隔超过limit，则认为是间断点，不作统计；
-    #   若wind_is_correct=1，则需输入wtid_info,否则只需输入data即可
-    # 输出：result
+    #   若wind_is_correct=1，则需输入wtid_info
 
     # 数据准备
     # 1.where条件
-    where_condition = "where wtid='632500001' and ts >= '2019-01-01 00:00:00' and ts < '2020-05-01 00:00:00' "
-    order_by = " order by 'ts' "
+    where_condition = "where wtid='632500001' and ts >= '2019-01-01 00:00:00' and ts < '2020-05-01 00:00:00' order by ts"
 
     # 2.选择列
     if wind_is_correct == 0:
@@ -121,9 +118,8 @@ def dataProcess(limit=200, wind_is_correct=0, wtid_info=[]):
         result_column = "wfid,wtid,ts,WTUR_WSpd_Ra_F32,WTPS_Ang_Ra_F32_blade1,WTUR_TurSt_Rs_S,WTUR_Temp_Ra_F32"
 
     # 3.分析数据准备
-    sql = "select " + result_column + " from {0} " + where_condition + order_by
+    sql = "select " + result_column + " from {0} " + where_condition
     sql = sql.format(table)
-    # print(sql)
     data = exec_sql(db, sql)
 
     # wind_is_correct不为0的情况
