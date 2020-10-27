@@ -1,48 +1,85 @@
+import os
+import math
+import datetime
+
 import pandas as pd
 import numpy as np
-import datetime
-import math
 
+import athena_helper as aws_helper
+
+import matplotlib.pyplot as plt
+
+from config.property import result_dir
+from config.property import yaw_error_result
+
+def wind_norm_altitude(altitude, temperature, wind_speed, density):
+    """
+    根据海拔和温度将风速标准化
+    :param altitude:
+    :param temperature:
+    :param wind_speed:
+    :param density:
+    :return:
+    """
+    AirDen = density
+    undernum = 1 + (1 / 273.15) * temperature
+    upnum = 1.293 * 10 ** (-(altitude / (18400 * undernum)))
+    air_density = upnum / undernum
+    windnorm = wind_speed * (air_density / AirDen) ** (1 / 3)
+
+    # windnorm = wind * (1.293 * 10 ** (-(altitude / (18400 * (1 + (1 / 273.15) * tem)))) / (1 + (1 / 273.15) * tem) / densi) ** (1 / 3)
+    return (windnorm)
 
 def compute_com(data_10min):
-    # 功能：计算每仓符合度
-    # 输入：data_10min——为尚未剔除的10min数据，包含：wfid、wtid、WTUR_WSpd_Ra_F32、WTUR_PwrAt_Ra_F32、windbin、power（担保/设计功率）、flag(0保留1剔除)
-    # 输出：每仓符合度
+    """
+    计算每仓符合度
+    :param data_10min: 尚未剔除的10min数据,包含：wfid、wtid、WTUR_WSpd_Ra_F32、WTUR_PwrAt_Ra_F32、windbin、power（担保/设计功率）、flag(0保留1剔除)
+    :return: 每仓符合度
+    """
+
     data_10min = data_10min[data_10min['flag'] == 0]  # 剔除点
     data_10min = data_10min.drop('flag', axis=1)
-    # 分仓
-    groupby_data_10min = data_10min.groupby(['wfid', 'wtid', 'windbin'])
-    # 求平均
-    windbin_com = groupby_data_10min.mean()
+
+    groupby_data_10min = data_10min.groupby(['wfid', 'wtid', 'windbin'])# 分仓
+
+    windbin_com = groupby_data_10min.mean()# 求平均
 
     windbin_com['count'] = groupby_data_10min['WTUR_WSpd_Ra_F32'].count()
     windbin_com = windbin_com.reset_index()
-    # 去掉不满足条件的风速仓
-    windbin_com = windbin_com.dropna()
-    # 去掉点数小于3的风速仓
-    windbin_com = windbin_com[windbin_com['count'] >= 3]
+
+    windbin_com = windbin_com.dropna()# 去掉不满足条件的风速仓
+
+    windbin_com = windbin_com[windbin_com['count'] >= 3] # 去掉点数小于3的风速仓
     windbin_com['comformity'] = windbin_com['WTUR_PwrAt_Ra_F32'] / windbin_com['power']
     return (windbin_com)
 
 
 def compute_k(data_10min):
-    # 功能：计算K值
-    # 输入：data_10min——为尚未剔除的10min数据，包含：wfid、wtid、WTUR_WSpd_Ra_F32、WTUR_PwrAt_Ra_F32、windbin、power（担保/设计功率）、flag(0保留1剔除)
-    # 输出：K值
+    """
+    计算K值
+    :param data_10min: 尚未剔除的10min数据，包含：wfid、wtid、WTUR_WSpd_Ra_F32、WTUR_PwrAt_Ra_F32、windbin、power（担保/设计功率）、flag(0保留1剔除)
+    :return: K值
+    """
+
     # 算风频
     windbin_fre = data_10min.groupby(['wfid', 'wtid', 'windbin'])['WTUR_WSpd_Ra_F32'].count()  # 分仓求平均
     windbin_fre = pd.DataFrame(windbin_fre)
     windbin_fre.columns = ['num']
     windbin_fre = windbin_fre.reset_index()
+
     # 算功率曲线
     data_10min_del = data_10min[data_10min['flag'] == 0]  # 剔除点
     data_10min_del = data_10min_del.drop('flag', axis=1)
     windbin_com = data_10min_del.groupby(['wfid', 'wtid', 'windbin']).mean()  # 分仓求平均
+
     windbin_com['count'] = data_10min_del.groupby(['wfid', 'wtid', 'windbin'])['WTUR_WSpd_Ra_F32'].count()
     windbin_com = windbin_com.reset_index()
+
     windbin_com = windbin_com.dropna()  # 去掉不满足条件的风速仓
+
     windbin_com = windbin_com[windbin_com['count'] >= 3]  # 去掉点数小于3的风速仓
     windbin_com = windbin_com.drop('count', axis=1)
+
     # 计算k
     windbin_com = pd.merge(windbin_com, windbin_fre, how='left', on=['wfid', 'wtid', 'windbin'])
     windbin_com['actual_pow_sum'] = windbin_com['WTUR_PwrAt_Ra_F32'] * windbin_com['num']
@@ -52,9 +89,12 @@ def compute_k(data_10min):
 
 
 def compute_capc(windbin_com):
-    # 功能：计算capc
-    # 输入：df——每仓符合度
-    # 输出：capc
+    """
+    计算capc
+    :param windbin_com: 每仓符合度
+    :return: capc
+    """
+
     df = windbin_com.copy()
     df['wind_3'] = df['WTUR_WSpd_Ra_F32'] ** 3
     df['wind_3_com'] = df['wind_3'] * df['comformity']
@@ -63,12 +103,13 @@ def compute_capc(windbin_com):
 
 
 def time_diff(data, var, flag=0):
-    # 功能：此函数用于计算行与行之间秒级的时间差
-    # 输入：
-    #   data数据集，var为指定的时间变量名(eg: ts/WTUR_Tm_Rw_Dt,可字符串可时间类型)
-    #   flag=0，异常时间差不做任何处理；
-    #   flag=1，超过(mean*2)的时间差用round(mean)代替
-    # 输出：在原数据集的最后一列加一列*_diff, 输出结果已按时间排序，索引已重置，第一行的空值用第二个值代替
+    """
+    计算行与行之间秒级的时间差
+    :param data: 数据集
+    :param var: 指定的时间变量名(eg: ts/WTUR_Tm_Rw_Dt,可字符串可时间类型)
+    :param flag: flag=0，异常时间差不做任何处理；flag=1，超过(mean*2)的时间差用round(mean)代替
+    :return: 在原数据集的最后一列加一列*_diff, 输出结果已按时间排序，索引已重置，第一行的空值用第二个值代替
+    """
 
     # 取出第一行的var列值
     sample_value = data.loc[data.index[0], var]
@@ -103,10 +144,13 @@ def time_diff(data, var, flag=0):
 
 
 def state_recognize(df, var_name):
-    # 功能：在输入的数据集上加一列：var_name_slice(每次状态切换的不重复标记)
-    # 输入：数据集df，需要做不重复标记的变量名var_name
-    # 输出：df加一列var_name_slice
-    # 注：若var_name那一列是相同的值，则var_name_slice全为1
+    """
+    在输入的数据集上加一列：var_name_slice(每次状态切换的不重复标记)
+    :param df: 数据集
+    :param var_name: 需要做不重复标记的变量名(若var_name那一列是相同的值，则var_name_slice全为1)
+    :return: df加一列var_name_slice
+    """
+    
     var_slice = var_name + '_slice'
     var_diff = var_name + '_diff_x'
     if len(df[var_name].unique()) == 1:  # 只有一种状态
@@ -215,3 +259,101 @@ def start_2h_count(start_stop, data):
     re = re.drop('index', axis=1)
 
     return (re)
+
+
+def yawerrorcal(df, wfid, wtid):
+    # df=dataset
+    cutinwind = 3
+    cutoutwind = 25
+    efcutoutwind = 7
+    windstep = 0.5
+    windbinno = int((cutoutwind - cutinwind) / windstep + 1)
+    efwindbinno = int((efcutoutwind - cutinwind) / windstep + 1)
+    windbin = np.linspace(3, 8, 11)
+    yaw_bin = np.linspace(-30, 29.8, num=300)
+    efwindbin = np.linspace(cutinwind, efcutoutwind, num=efwindbinno)
+    wind_dir_bin = np.zeros((efwindbinno, 300))
+    fit_power_db = np.zeros((efwindbinno, 300))
+    power_std = np.zeros((efwindbinno, 9))
+    power_avg = np.zeros((efwindbinno, 9))
+    power_std_r = np.zeros((efwindbinno, 9))
+    power_avg_r = np.zeros((efwindbinno, 9))
+    yawerror = np.zeros(efwindbinno + 1)
+    maxpower = np.zeros(windbinno + 1)
+    validdata = np.zeros(efwindbinno + 1)
+    for iwind in range(1, efwindbinno + 1):
+        wind_speed = (iwind - 1) * 0.5 + cutinwind
+        # print(wind_speed)
+        tempwindbin = df[(df['WTUR_WSpd_Ra_F32'] > wind_speed - 0.25) & (
+                df['WTUR_WSpd_Ra_F32'] <= wind_speed + 0.25)]
+        validdata[iwind - 1] = round(len(tempwindbin) * 7 / 3600, 2)
+        for iwdir in range(1, 301):
+            tempdirbin = tempwindbin[(tempwindbin['WYAW_Wdir_Ra_F32'] > (iwdir - 1) * 0.2 - 30) & (
+                    tempwindbin['WYAW_Wdir_Ra_F32'] <= iwdir * 0.2 - 30)]
+            wind_dir_bin[iwind - 1][iwdir - 1] = np.nanmean(tempdirbin['WTUR_PwrAt_Ra_F32'])
+        fitpara = np.polyfit(yaw_bin[~np.isnan(wind_dir_bin[iwind - 1])],
+                             wind_dir_bin[iwind - 1][~np.isnan(wind_dir_bin[iwind - 1])], 2)
+        fitpower = np.polyval(fitpara, yaw_bin)
+        yawerror[iwind - 1] = yaw_bin[np.where(fitpower == np.max(fitpower))]
+        maxpower[iwind - 1] = np.max(fitpower)
+        yaw_error = yawerror[iwind - 1]
+        fit_power_db[iwind - 1] = fitpower
+
+        num_of_step = 10
+        for step in np.arange(1, num_of_step, 1):
+            power_avg[iwind - 1][step - 1] = np.nanmean(wind_dir_bin[iwind - 1][(90 - step * 10):(90 - (step - 1) * 10)])
+            power_std[iwind - 1][step - 1] = np.nanstd(wind_dir_bin[iwind - 1][(90 - step * 10):(90 - (step - 1) * 10)])
+            power_avg_r[iwind - 1][step - 1] = np.nanmean(wind_dir_bin[iwind - 1][(220 - step * 10):(220 - (step - 1) * 10)])
+            power_std_r[iwind - 1][step - 1] = np.nanstd(wind_dir_bin[iwind - 1][(220 - step * 10):(220 - (step - 1) * 10)])
+        if (yaw_error > (-14.0)) & (yaw_error < 14.0):
+            continue
+        elif yaw_error <= -14.0:
+            for j in np.arange(1, num_of_step - 2, 1):
+                if (power_avg[iwind - 1][j] >= power_avg[iwind - 1][j - 1]) & (power_avg[iwind - 1][j] >= power_avg[iwind - 1][j + 1]):
+                    yawerror[iwind - 1] = -15.0 - (j - 1) * 2
+                    break
+                elif (power_avg[iwind - 1][j] >= power_avg[iwind - 1][j - 1]) & (power_std[iwind - 1][j] <= power_std[iwind - 1][j + 1]):
+                    yawerror[iwind - 1] = -15.0 - (j - 1) * 2
+                    break
+                else:
+                    continue
+        elif yaw_error >= 14.0:
+            for j in np.arange(1, num_of_step - 2, 1):
+                if (power_avg_r[iwind - 1][j] >= power_avg_r[iwind - 1][j - 1]) & (power_avg_r[iwind - 1][j] >= power_avg_r[iwind - 1][j + 1]):
+                    yawerror[iwind - 1] = 15.0 + (j - 1) * 2
+                    break
+                elif (power_avg_r[iwind - 1][j] >= power_avg_r[iwind - 1][j - 1]) & (power_std_r[iwind - 1][j] <= power_std_r[iwind - 1][j + 1]):
+                    yawerror[iwind - 1] = 15.0 + (j - 1) * 2
+                    break
+                else:
+                    continue
+    plt.figure(figsize=(12, 6))
+    for i in np.arange(1, 10, 1):
+        plt.subplot(3, 3, i)
+        max_power = np.linspace(maxpower[i - 1] - 20 * ((3 + (i - 1) * 0.5) / 3) ** 3, maxpower[i - 1] + 60 * ((3 + (i - 1) * 0.5) / 3) ** 3, 8)
+        yaw_error_array = np.array([yawerror[i - 1]] * 8)
+        plt.scatter(yaw_bin, wind_dir_bin[i - 1][0:300], c="b", marker=".")
+        plt.plot(yaw_bin, fit_power_db[i - 1], "r-")
+        plt.plot(yaw_error_array, max_power, "r--")
+        plt.xlabel("wind direction[deg]")
+        plt.ylabel("power[kW] " + str(windbin[i - 1]) + 'm/s')
+        # plt.title(str(wsp)+"m/s  "+str(yawerror[i-1])+"deg")
+    filename = str(wtid) + "_4_4_yaw_error.png"
+    savename = os.path.join(result_dir + yaw_error_result, filename)
+    aws_helper.save_png_aws(plt, savename, dpi=300)
+    plt.close()
+
+    validdata[efwindbinno] = sum(validdata)
+    yawerror[efwindbinno] = np.dot(np.power(efwindbin, 3), yawerror[0:efwindbinno]) / sum(np.power(efwindbin, 3))
+    yawerrRlt = pd.DataFrame(
+        {"windbin": np.concatenate((efwindbin, np.array([np.nan])), axis=0), "Duration[h]": validdata,
+         "YawError[deg]": yawerror})
+    yawerrRlt['wfid'] = wfid
+    yawerrRlt['wtid'] = wtid
+
+    # print(yawerrRlt.head())
+    yawerrRlt.columns = ['windbin', 'Duration', 'YawError', 'wfid', 'wtid']
+    yawerrRlt.iloc[:-1, :].to_csv(os.path.join(result_dir + yaw_error_result, str(wtid) + '_4_4_yaw_error_windbin.csv'), index=False)
+    yawerrRlt.iloc[-1, :].to_frame().T[['Duration', 'YawError', 'wfid', 'wtid']].to_csv(
+        os.path.join(result_dir + yaw_error_result, str(wtid) + '_4_4_yaw_error_sum.csv'), index=False)
+    return ()
