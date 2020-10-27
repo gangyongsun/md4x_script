@@ -1,7 +1,7 @@
 # *_*coding:utf-8 *_*
 
-from common.DBUtil import exec_sql
-from common.ComputeUtil import time_diff
+from common.db_util import exec_sql
+from common.common_util import time_diff
 from config.property import db
 from config.property import table
 

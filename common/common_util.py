@@ -26,8 +26,6 @@ def wind_norm_altitude(altitude, temperature, wind_speed, density):
     upnum = 1.293 * 10 ** (-(altitude / (18400 * undernum)))
     air_density = upnum / undernum
     windnorm = wind_speed * (air_density / AirDen) ** (1 / 3)
-
-    # windnorm = wind * (1.293 * 10 ** (-(altitude / (18400 * (1 + (1 / 273.15) * tem)))) / (1 + (1 / 273.15) * tem) / densi) ** (1 / 3)
     return (windnorm)
 
 def compute_com(data_10min):
@@ -150,7 +148,7 @@ def state_recognize(df, var_name):
     :param var_name: 需要做不重复标记的变量名(若var_name那一列是相同的值，则var_name_slice全为1)
     :return: df加一列var_name_slice
     """
-    
+
     var_slice = var_name + '_slice'
     var_diff = var_name + '_diff_x'
     if len(df[var_name].unique()) == 1:  # 只有一种状态
@@ -175,10 +173,13 @@ def state_recognize(df, var_name):
 
 
 def start_stop_extract(df, data):
-    # 功能：基于df取出起停机的时长、时间范围、平均风速
-    # 输入：df——每个风机状态一行统计结果，包含时间范围、时长、是否连续；data——7s数据，包含时间、风速; flag——若为1，则输出状态3和4时的变桨速率和扭矩反馈；若为0，则不输出
-    # 输出：re——起停机的时长、时间范围、平均风速；spdblade_tor——风机状态为3和4时的变桨速率和扭矩反馈
-    # 起机提取：3-4-5，统计3和4的时长以及平均风速
+    """
+    基于df取出起停机的时长、时间范围、平均风速
+    :param df: 每个风机状态一行统计结果，包含时间范围、时长、是否连续
+    :param data: 7s数据，包含时间、风速
+    :return: re——起停机的时长、时间范围、平均风速;pdblade_tor——风机状态为3和4时的变桨速率和扭矩反馈;起机提取：3-4-5，统计3和4的时长以及平均风速
+    """
+
     re_1 = pd.DataFrame()
     for i in range(0, (len(df) - 2)):
         if (df.loc[i, 'WTUR_TurSt_Rs_S'] == 3) & (df.loc[(i + 1), 'WTUR_TurSt_Rs_S'] == 4) & (df.loc[(i + 2), 'WTUR_TurSt_Rs_S'] == 5) & (
@@ -224,9 +225,13 @@ def start_stop_extract(df, data):
 
 
 def start_2h_count(start_stop, data):
-    # 功能：基于start_stop将时间按两小时切割，计算起机次数
-    # 输入：start_stop——起停机时长、时间范围、平均风速；data——原始7s数据
-    # 输出：start_2h
+    """
+    基于start_stop将时间按两小时切割，计算起机次数
+    :param start_stop: 起停机时长、时间范围、平均风速
+    :param data: 原始7s数据
+    :return: start_2h
+    """
+
     # 1. 对start_stop的时间进行划分，统计次数
     start_stop = start_stop[start_stop['state'] == 'start']
     start_stop['date'] = start_stop['ts_start'].str[0:10]

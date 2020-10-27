@@ -16,7 +16,7 @@ Updated on Sun Sep  27 15:11:19 2020
 from common.FunUtil import WindNorm_altitude
 from common.FunUtil import draw
 from common.FunUtil import draw_ext
-from common.DBUtil import exec_sql
+from common.db_util import exec_sql
 from config.property import lable_wind
 from config.property import lable_power
 from config.property import lable_generator_speed

@@ -11,19 +11,22 @@ Updated on Sun Sep  27 15:11:19 2020
 输出: start_stop: 启停机时长统计：wfid, wtid, ts, 起/停机, 时长(s)
 """
 from common.FunUtil import WindNorm_altitude
-from common.ComputeUtil import time_diff
-from common.ComputeUtil import state_recognize
-from common.ComputeUtil import start_stop_extract
-from common.ComputeUtil import start_2h_count
-from common.DBUtil import exec_sql
+from common.common_util import time_diff
+from common.common_util import state_recognize
+from common.common_util import start_stop_extract
+from common.common_util import start_2h_count
+from common.db_util import exec_sql
 from config.property import db
 from config.property import table
+from config.property import result_dir
+from config.property import start_stop_result
 
 import pandas as pd
 import matplotlib.pyplot as plt
+import athena_helper as aws_helper
 
 
-def plot(start_stop, start_2h):
+def plot(start_stop, start_2h, data):
     # 绘图
     # 1
     plt.figure()
@@ -31,8 +34,11 @@ def plot(start_stop, start_2h):
     plt.xlabel("2h wind mean [m/s]", fontproperties="STXihei")
     plt.ylabel("start count", fontproperties="STXihei")
     plt.grid()
-    plt.show()
+    # plt.show()
+    file_name = str(data.loc[0, 'wtid']) + '_4_1_wind2h_count.png'
+    aws_helper.save_png_aws(plt, result_dir + start_stop_result + file_name, dpi=300)
     plt.close()
+
     # 2
     start = start_stop[start_stop['state'] == 'start']
     plt.figure()
@@ -40,7 +46,9 @@ def plot(start_stop, start_2h):
     plt.xlabel("wind [m/s]", fontproperties="STXihei")
     plt.ylabel("start duration [s]", fontproperties="STXihei")
     plt.grid()
-    plt.show()
+    # plt.show()
+    file_name = str(data.loc[0, 'wtid']) + '_4_1_wind_start_duration.png'
+    aws_helper.save_png_aws(plt, result_dir + start_stop_result + file_name, dpi=300)
     plt.close()
     # 3
     stop = start_stop[start_stop['state'] == 'stop']
@@ -49,14 +57,16 @@ def plot(start_stop, start_2h):
     plt.xlabel("wind [m/s]", fontproperties="STXihei")
     plt.ylabel("stop duration [s]", fontproperties="STXihei")
     plt.grid()
-    plt.show()
+    # plt.show()
+    file_name = str(data.loc[0, 'wtid']) + '_4_1_wind_stop_duration.png'
+    aws_helper.save_png_aws(plt, result_dir + start_stop_result + file_name, dpi=300)
     plt.close()
 
 
 def main_process(data, limit):
     # 1. 前期处理：根据风机状态将数据切割，取出时长和时间范围，并判断是否连续
-    #data = data.sort_values('ts') #用sql处理
-    data = data.reset_index(drop=True)  # 重新排序，去掉索引
+    # data = data.sort_values('ts') #用sql处理
+    # data = data.reset_index(drop=True)  # 重新排序，去掉索引
     data = time_diff(data, 'ts')  # 加一列：ts_diff，异常值不能用round(mean)代替
     data_1 = state_recognize(data, 'WTUR_TurSt_Rs_S')
     group_by_result = data_1.groupby(['wfid', 'wtid', 'WTUR_TurSt_Rs_S', 'WTUR_TurSt_Rs_S_slice'])
@@ -96,7 +106,7 @@ def main_process(data, limit):
     # 4. 结果3：基于start_stop将时间按两小时切割，计算起机次数
     start_2h = start_2h_count(start_stop, data)
 
-    # plot(start_stop,start_2h)
+    plot(start_stop, start_2h, data)
 
     return (start_stop)
 
@@ -107,20 +117,26 @@ def dataProcess(limit=200, wind_is_correct=0, wtid_info=[]):
     #   limit——当时间间隔超过limit，则认为是间断点，不作统计；
     #   若wind_is_correct=1，则需输入wtid_info
 
-    # 数据准备
-    # 1.where条件
-    where_condition = "where wtid='632500001' and ts >= '2019-01-01 00:00:00' and ts < '2020-05-01 00:00:00' order by ts"
+    wtid_data = '632500001'
+    start_time = '2019-01-01 00:00:00'
+    end_time = '2019-12-31 00:00:00'
+
+    # 基本where条件
+    condition_where = "where wtid = '" + wtid_data + "' and ts >= '" + start_time + "' and ts < '" + end_time + "' "
+    order_by = " order by ts "
+    # 7s数据基本列
+    result_column = "wfid, wtid, ts, WTUR_WSpd_Ra_F32, WTPS_Ang_Ra_F32_blade1, WTUR_TurSt_Rs_S"
 
     # 2.选择列
-    if wind_is_correct == 0:
-        result_column = "wfid,wtid,ts,WTUR_WSpd_Ra_F32,WTPS_Ang_Ra_F32_blade1,WTUR_TurSt_Rs_S"
-    else:
-        result_column = "wfid,wtid,ts,WTUR_WSpd_Ra_F32,WTPS_Ang_Ra_F32_blade1,WTUR_TurSt_Rs_S,WTUR_Temp_Ra_F32"
+    if wind_is_correct != 0:
+        result_column = result_column + ", WTUR_Temp_Ra_F32 "
 
     # 3.分析数据准备
-    sql = "select " + result_column + " from {0} " + where_condition
+    sql = "select " + result_column + " from {0} " + condition_where + order_by
     sql = sql.format(table)
+    # print(sql)
     data = exec_sql(db, sql)
+    # z.show(data)
 
     # wind_is_correct不为0的情况
     if wind_is_correct != 0:
@@ -135,7 +151,8 @@ def dataProcess(limit=200, wind_is_correct=0, wtid_info=[]):
         data['WTUR_TurSt_Rs_S'] = pd.to_numeric(data['WTUR_TurSt_Rs_S'])
 
     start_stop = main_process(data, limit)
-    return (start_stop)
+    start_stop.to_csv(result_dir + start_stop_result + str(data.loc[0, 'wtid']) + '_start_stop.csv', index=False)
+    # return (start_stop)
 
 
 dataProcess(limit=200, wind_is_correct=0, wtid_info=[])
