@@ -12,6 +12,19 @@ import matplotlib.pyplot as plt
 from config.property import result_dir
 from config.property import yaw_error_result
 
+
+def genNumArray(start, end):
+    """
+    生成数组数组
+    :param start: 开始数字
+    :param end: 结束数字
+    :return: 数字数组
+    """
+    result_array=[]
+    for num in range(start, end+1, 1):
+        result_array.append(num)
+    return result_array
+
 def wind_norm_altitude(altitude, temperature, wind_speed, density):
     """
     根据海拔和温度将风速标准化
@@ -46,9 +59,12 @@ def compute_com(data_10min):
     windbin_com = windbin_com.reset_index()
 
     windbin_com = windbin_com.dropna()# 去掉不满足条件的风速仓
-
     windbin_com = windbin_com[windbin_com['count'] >= 3] # 去掉点数小于3的风速仓
+
+
     windbin_com['comformity'] = windbin_com['WTUR_PwrAt_Ra_F32'] / windbin_com['power']
+
+
     return (windbin_com)
 
 
@@ -158,8 +174,10 @@ def state_recognize(df, var_name):
         df.loc[0, var_diff] = 0
         a = np.linspace(0, len(df) - 1, len(df))
         df['ID_1'] = a.reshape(len(df), 1)
+
         a = df.loc[df[var_diff] != 0, 'ID_1']
         a = a.reset_index()
+
         a = a.drop('index', axis=1)
         df[var_slice] = 0
         df.loc[0:int(a.loc[0] - 1), var_slice] = 1
@@ -266,17 +284,22 @@ def start_2h_count(start_stop, data):
     return (re)
 
 
-def yawerrorcal(df, wfid, wtid):
+def yawerrorcal(df):
+    wfid = data['wfid'].iloc[0]
+    wtid = data['wtid'].iloc[0]
     # df=dataset
     cutinwind = 3
     cutoutwind = 25
     efcutoutwind = 7
     windstep = 0.5
+
     windbinno = int((cutoutwind - cutinwind) / windstep + 1)
     efwindbinno = int((efcutoutwind - cutinwind) / windstep + 1)
     windbin = np.linspace(3, 8, 11)
     yaw_bin = np.linspace(-30, 29.8, num=300)
+
     efwindbin = np.linspace(cutinwind, efcutoutwind, num=efwindbinno)
+
     wind_dir_bin = np.zeros((efwindbinno, 300))
     fit_power_db = np.zeros((efwindbinno, 300))
     power_std = np.zeros((efwindbinno, 9))
@@ -286,18 +309,18 @@ def yawerrorcal(df, wfid, wtid):
     yawerror = np.zeros(efwindbinno + 1)
     maxpower = np.zeros(windbinno + 1)
     validdata = np.zeros(efwindbinno + 1)
+
     for iwind in range(1, efwindbinno + 1):
         wind_speed = (iwind - 1) * 0.5 + cutinwind
         # print(wind_speed)
-        tempwindbin = df[(df['WTUR_WSpd_Ra_F32'] > wind_speed - 0.25) & (
-                df['WTUR_WSpd_Ra_F32'] <= wind_speed + 0.25)]
+        tempwindbin = df[(df['WTUR_WSpd_Ra_F32'] > wind_speed - 0.25) & (df['WTUR_WSpd_Ra_F32'] <= wind_speed + 0.25)]
         validdata[iwind - 1] = round(len(tempwindbin) * 7 / 3600, 2)
+
         for iwdir in range(1, 301):
-            tempdirbin = tempwindbin[(tempwindbin['WYAW_Wdir_Ra_F32'] > (iwdir - 1) * 0.2 - 30) & (
-                    tempwindbin['WYAW_Wdir_Ra_F32'] <= iwdir * 0.2 - 30)]
+            tempdirbin = tempwindbin[(tempwindbin['WYAW_Wdir_Ra_F32'] > (iwdir - 1) * 0.2 - 30) & (tempwindbin['WYAW_Wdir_Ra_F32'] <= iwdir * 0.2 - 30)]
             wind_dir_bin[iwind - 1][iwdir - 1] = np.nanmean(tempdirbin['WTUR_PwrAt_Ra_F32'])
-        fitpara = np.polyfit(yaw_bin[~np.isnan(wind_dir_bin[iwind - 1])],
-                             wind_dir_bin[iwind - 1][~np.isnan(wind_dir_bin[iwind - 1])], 2)
+
+        fitpara = np.polyfit(yaw_bin[~np.isnan(wind_dir_bin[iwind - 1])], wind_dir_bin[iwind - 1][~np.isnan(wind_dir_bin[iwind - 1])], 2)
         fitpower = np.polyval(fitpara, yaw_bin)
         yawerror[iwind - 1] = yaw_bin[np.where(fitpower == np.max(fitpower))]
         maxpower[iwind - 1] = np.max(fitpower)
@@ -333,6 +356,7 @@ def yawerrorcal(df, wfid, wtid):
                 else:
                     continue
     plt.figure(figsize=(12, 6))
+
     for i in np.arange(1, 10, 1):
         plt.subplot(3, 3, i)
         max_power = np.linspace(maxpower[i - 1] - 20 * ((3 + (i - 1) * 0.5) / 3) ** 3, maxpower[i - 1] + 60 * ((3 + (i - 1) * 0.5) / 3) ** 3, 8)
@@ -350,13 +374,13 @@ def yawerrorcal(df, wfid, wtid):
 
     validdata[efwindbinno] = sum(validdata)
     yawerror[efwindbinno] = np.dot(np.power(efwindbin, 3), yawerror[0:efwindbinno]) / sum(np.power(efwindbin, 3))
-    yawerrRlt = pd.DataFrame(
-        {"windbin": np.concatenate((efwindbin, np.array([np.nan])), axis=0), "Duration[h]": validdata,
-         "YawError[deg]": yawerror})
+    yawerrRlt = pd.DataFrame({"windbin": np.concatenate((efwindbin, np.array([np.nan])), axis=0), "Duration[h]": validdata, "YawError[deg]": yawerror})
     yawerrRlt['wfid'] = wfid
     yawerrRlt['wtid'] = wtid
 
-    # print(yawerrRlt.head())
+    return (yawerrRlt)
+
+    print(yawerrRlt.head())
     yawerrRlt.columns = ['windbin', 'Duration', 'YawError', 'wfid', 'wtid']
     yawerrRlt.iloc[:-1, :].to_csv(os.path.join(result_dir + yaw_error_result, str(wtid) + '_4_4_yaw_error_windbin.csv'), index=False)
     yawerrRlt.iloc[-1, :].to_frame().T[['Duration', 'YawError', 'wfid', 'wtid']].to_csv(
