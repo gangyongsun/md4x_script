@@ -163,6 +163,7 @@ def main_process(data,result_dir):
     result_2 = result_2.drop(['WTUR_State_Rn_I8','count'],axis=1)
     result_2['count'] = result.groupby(['wfid','wtid','windbin'])['WTUR_WSpd_Ra_F32'].count()
     result_2 = result_2.reset_index()
+
     result_2.to_csv(result_dir + '/' + str(data.loc[0,'wtid']) + '_3_1_character_curve.csv', index=False)   
     plot(data,result,result_2,result_dir)
     

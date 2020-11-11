@@ -202,26 +202,34 @@ def main_process(data,result_dir,limit):
     # 1. 前期处理：根据风机状态将数据切割，取出时长和时间范围，并判断是否连续
     data = data.sort_values('ts')
     data = data.reset_index(drop = True)
+
     data = time_diff(data,'ts')       # 加一列：ts_diff，异常值不能用round(mean)代替
+
     data_1 = state_recognize(data,'WTUR_TurSt_Rs_S')
     result = data_1.groupby(['wfid','wtid','WTUR_TurSt_Rs_S','WTUR_TurSt_Rs_S_slice'])['ts_diff'].sum()
+
     result = pd.DataFrame(result)
     result['ts_diff_max'] = data_1.groupby(['wfid','wtid','WTUR_TurSt_Rs_S','WTUR_TurSt_Rs_S_slice'])['ts_diff'].max()
     result['ts_start'] = data_1.groupby(['wfid','wtid','WTUR_TurSt_Rs_S','WTUR_TurSt_Rs_S_slice'])['ts'].min()
     result['ts_end'] = data_1.groupby(['wfid','wtid','WTUR_TurSt_Rs_S','WTUR_TurSt_Rs_S_slice'])['ts'].max()
-    result = result.reset_index() 
+    result = result.reset_index()
+
     result['is_discontinue'] = [(1 if i > limit else 0) for i in result['ts_diff_max']]
     result = result.sort_values('WTUR_TurSt_Rs_S_slice')
     result = result.reset_index()
+
     result = result.drop('index',axis=1)   
     result = result.rename(columns = {'ts_diff':'seconds'})
+
     # 2. 结果1：基于result统计起停机时长、时间范围、平均风速
     start_stop = start_stop_extract(result,data)   # 基于result取出起停机的时长、时间范围、平均风速
     start_stop.to_csv(result_dir + '/' + str(data.loc[0,'wtid']) + '_5_1_start_stop_slice.csv', index=False)
+
     # 3. 结果2：基于result统计起停机时长、时间范围、平均风速
     start_stop_sta = start_stop.groupby(['wfid','wtid','state'])['wtid'].count()
     start_stop_sta = pd.DataFrame(start_stop_sta)
-    start_stop_sta.columns = ['count']    
+
+    start_stop_sta.columns = ['count']
     start_stop_sta['seconds_min'] = start_stop.groupby(['wfid','wtid','state'])['seconds'].min()
     start_stop_sta['seconds_max'] = start_stop.groupby(['wfid','wtid','state'])['seconds'].max()
     start_stop_sta['seconds_mean'] = start_stop.groupby(['wfid','wtid','state'])['seconds'].mean()    
@@ -235,7 +243,8 @@ def main_process(data,result_dir,limit):
     start_stop_sta['seconds_4_max'] = start_stop.groupby(['wfid','wtid','state'])['seconds_4'].max()
     start_stop_sta['seconds_4_mean'] = start_stop.groupby(['wfid','wtid','state'])['seconds_4'].mean()
     start_stop_sta = start_stop_sta.reset_index()
-    start_stop_sta.to_csv(result_dir + '/' + str(data.loc[0,'wtid']) + '_5_1_start_stop_count.csv', index=False)    
+    start_stop_sta.to_csv(result_dir + '/' + str(data.loc[0,'wtid']) + '_5_1_start_stop_count.csv', index=False)
+
     # 4. 结果3：基于start_stop将时间按两小时切割，计算起机次数    
     start_2h = start_2h_count(start_stop,data,result_dir)
     start_2h.to_csv(result_dir + '/' + str(data.loc[0,'wtid']) + '_5_1_start_2h.csv', index=False)
